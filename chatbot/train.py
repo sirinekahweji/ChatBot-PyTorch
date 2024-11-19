@@ -3,7 +3,8 @@ from nltk_utils import tokenize, stem, bag_of_words
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader  
+from torch.utils.data import Dataset, DataLoader
+from model import NeuralNet
 
 # Charger les intentions depuis le fichier JSON
 with open('intents.json', 'r') as f:
@@ -57,39 +58,42 @@ class ChatDataSet(Dataset):
     def __len__(self):  # Correction du nom de la méthode
         return self.n_samples
 
-# Hyperparamètres
-batch_size = 8
-hidden_size = 8
-output_size = len(tags)
-input_size = len(x_train[0])
-learning_rate=0.001
-num_epochs=1000
+if __name__ == "__main__":
+    # Hyperparamètres
+    batch_size = 8
+    hidden_size = 8
+    output_size = len(tags)
+    input_size = len(x_train[0])
+    learning_rate = 0.001
+    num_epochs = 1000
 
-#print(input_size, len(all_words))
-#print(output_size, tags)
+    # Initialisation du Dataset et du DataLoader
+    dataset = ChatDataSet()
+    train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=0)  # Set num_workers=0
 
-# Initialisation du Dataset et du DataLoader
-dataset = ChatDataSet()
-train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = NeuralNet(input_size, hidden_size, output_size).to(device)
 
-device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model= NeuralNet[input_size,hidden_size,output_size]
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+    # Training loop
+    for epoch in range(num_epochs):
+        for words, labels in train_loader:
+            words = words.to(device)
+            labels = labels.to(device)
 
-criterion=nn.CrossEntropyLoss(model.parameters(),lr=learning_rate)
-optimazier=torch.optim.adam()
+            # Forward pass
+            outputs = model(words)
+            loss = criterion(outputs, labels)
 
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-for epoch in range(num_epochs):
-    for(words,labels) in train_loader:
-        words=words.to(device)
-        labels=labels.to(device)
+        if (epoch + 1) % 100 == 0:
+            print(f'Epoch {epoch+1}/{num_epochs}, Loss={loss.item():.4f}')
 
-
-        outputs=model(words)
-        loss=criterion(outputs,labels)
-
-
-        optimazier.zero_grad()
-        loss.backward()
-        optimazier.step()
+    print(f'Final loss: Loss={loss.item():.4f}')
